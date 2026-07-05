@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 10.0.2.2 is the emulator's alias for the host machine's localhost.
+         Only this host is allowed to use plaintext HTTP; everything else
+         still requires HTTPS. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

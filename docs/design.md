@@ -58,15 +58,24 @@ Resolved from Google's Maven repo (already configured by the AGP 9 template's
 
 Built, installed, and run on the `Medium_Phone_API_36.1` emulator against a
 live `remote-compose-hello` instance:
-1. Screenshot confirmed "Hello world" text + purple "Click me" button render.
-2. Tapping the button produced a Toast reading "Received action id: 1" —
+1. Screenshot confirmed "Hello world" text + purple "Click me" button +
+   blue "Open Link" button render.
+2. Tapping "Click me" produced a Toast reading "Received action id: 1" —
    confirming the id chosen server-side in `CLICK_ME_ACTION_ID` round-trips
    through the RemoteCompose document and `addIdActionListener` correctly.
+3. Tapping "Open Link" opened `www.wellsfargo.com` (the real Wells Fargo
+   homepage rendered) in a Chrome Custom Tab (`CustomTabActivity` confirmed
+   in focus) — confirming `OPEN_LINK_ACTION_ID`'s metadata (the URL)
+   round-trips through the document and `openUrlInBrowser` correctly.
 
 ## Known limitations (sample-app scope)
 
 - No retry/backoff policy beyond the manual Retry button.
-- No app-side handling for `CLICK_ME_ACTION_ID` beyond the demonstration
-  Toast — a real app would look up the id in a `when` block mapping ids to
-  behavior (network calls, navigation, etc.), as described in
-  `remote-compose-hello`'s own `docs/design.md`.
+- `CLICK_ME_ACTION_ID` still only shows a demonstration Toast — a real app
+  would replace it with actual behavior (network calls, navigation, etc.).
+  `OPEN_LINK_ACTION_ID` is the first action id with real behavior: it opens
+  its metadata URL in a Custom Tab (see `openUrlInBrowser` in
+  `MainActivity.kt`).
+- No URL validation beyond scheme-normalization (`https://` is prepended
+  when missing) — a malformed or unexpected metadata string would be passed
+  to Custom Tabs as-is.

@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.example.remotecomposehelloclient"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.example.remotecomposehelloclient"
         minSdk = 26

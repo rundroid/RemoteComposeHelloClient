@@ -3,6 +3,7 @@ package com.example.remotecomposehelloclient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,8 +75,8 @@ fun RemoteDocumentScreen(
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.Top,
     ) {
         when (val current = state) {
             is DocumentState.Loading -> CircularProgressIndicator()
@@ -97,7 +98,17 @@ fun RemoteDocumentScreen(
  * [Dispatchers.IO] and only [RemoteComposePlayer.setPreparedDocument] (cheap,
  * no I/O) runs on the main thread. Keyed on [documentBytes] so this only
  * re-runs when the document actually changes, not on every recomposition.
+ *
+ * `androidx.compose.remote:*` is alpha and marked `@RestrictTo(LIBRARY_GROUP)`
+ * upstream in its entirety -- every call into it here (`RemoteComposePlayer`,
+ * `RemoteDocument`, `Limits`, `prepareDocument`/`setPreparedDocument`,
+ * `addIdActionListener`, ...) trips Android Lint's `RestrictedApi` check.
+ * That's enforced by Lint/Metalava, not the Kotlin/Java compiler, and this
+ * project already accepts that trade-off throughout (see the backend's
+ * `docs/design.md` "Stability caveat" section) -- there's no non-restricted
+ * entry point to this library's document-playback API at all.
  */
+@Suppress("RestrictedApi")
 @Composable
 private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, String?) -> Unit) {
     val context = LocalContext.current
@@ -134,5 +145,5 @@ private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, 
         }
     }
 
-    AndroidView(factory = { player })
+    AndroidView(modifier = Modifier.fillMaxWidth(), factory = { player })
 }

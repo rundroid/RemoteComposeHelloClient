@@ -93,6 +93,18 @@ extracted from what used to be `MainActivity`-only code. `NewsDocumentClient.kt`
 mirrors `HelloDocumentClient.kt`'s OkHttp-on-`Dispatchers.IO` pattern exactly,
 against `http://10.0.2.2:8080/api/news`.
 
+### Cards are tappable: open the article in a Custom Tab
+
+The backend attaches each article's own URL (distinct from `urlToImage`) to
+its card via `OPEN_ARTICLE_ACTION_ID` -- see `remote-compose-hello`'s
+`docs/design.md` "Cards are tappable" section. `NewsActivity` mirrors this id
+(same convention as `MainActivity`'s `CLICK_ME_ACTION_ID`/`OPEN_LINK_ACTION_ID`)
+and, on that action, calls `openUrlInBrowser` (extracted from `MainActivity.kt`
+into `BrowserUtils.kt` so both screens share one implementation) to open the
+article in a Chrome Custom Tab. Verified on the emulator: tapping a card opens
+the real article (e.g. a BBC News page) in a Custom Tab; the Hello screen's
+existing "Open Link" button still works unchanged after the extraction.
+
 ### Article images: what it actually took to make URL-backed bitmaps work
 
 The backend embeds each article's image as a URL (`writer.addBitmapUrl`), not

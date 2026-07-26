@@ -1,15 +1,11 @@
 package com.example.remotecomposehelloclient
 
-import android.content.ActivityNotFoundException
-import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -91,18 +87,4 @@ private fun HelloDocumentScreen() {
             }
         },
     )
-}
-
-private fun openUrlInBrowser(context: Context, url: String) {
-    val normalizedUrl =
-        if (url.startsWith("http://") || url.startsWith("https://")) {
-            url
-        } else {
-            "https://$url"
-        }
-    try {
-        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(normalizedUrl))
-    } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "No browser available to open link", Toast.LENGTH_SHORT).show()
-    }
 }

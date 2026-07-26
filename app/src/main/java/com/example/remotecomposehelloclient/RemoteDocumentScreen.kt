@@ -101,7 +101,21 @@ fun RemoteDocumentScreen(
 @Composable
 private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, String?) -> Unit) {
     val context = LocalContext.current
-    val player = remember { RemoteComposePlayer(context) }
+    val player =
+        remember {
+            RemoteComposePlayer(context).apply {
+                // This budget is checked against the *declared* per-image dimensions
+                // (see MAX_DECLARED_IMAGE_DIMENSION in the backend's NewsCarouselDocument.kt),
+                // not the real decoded size, and empirically measured at ~274MB for a full
+                // 10-article news document at a 2000x2000 declared bound (confirmed via the
+                // player's own diagnostic overlay: it reported ~1152MB at a since-reduced
+                // 4096x4096 bound, and ~274MB after lowering it to 2000x2000 -- consistent
+                // with the total scaling with declared-dimension squared). 400MB leaves
+                // real headroom above that measured figure. Default budget (20MB,
+                // Limits.MAX_BITMAP_MEMORY) is far too small for a document like this.
+                setMaxBitmapMemory(400 * 1024 * 1024)
+            }
+        }
 
     LaunchedEffect(documentBytes) {
         // Documents referencing images by URL (ENCODING_URL bitmaps) are rejected during

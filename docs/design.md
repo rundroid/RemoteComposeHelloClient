@@ -127,28 +127,32 @@ is an open follow-up:
    enforces that a decoded image's actual pixel dimensions never exceed the
    *declared* ones (a guard against a document under-declaring size to
    smuggle an oversized bitmap). Fixed by declaring a generous
-   `MAX_DECLARED_IMAGE_DIMENSION = 4096` bound instead (backend commit on
+   `MAX_DECLARED_IMAGE_DIMENSION` bound instead (backend commit on
    `worktree-news-carousel`) -- the server never downloads the image, so it
    can't declare the real size, only a safe upper bound.
 
-4. **Total bitmap memory budget (NOT resolved -- open follow-up).** After
-   fix 3, the news screen still doesn't reliably render real cards: a
+4. **Total bitmap memory budget (done).** With fix 3 at an initial `4096`
+   declared bound, the news screen still didn't reliably render real cards: a
    real run showed one card's image slot replaced with the player's own
-   "memory"-related warning overlay (partial text: "...map memory 1152M..."),
-   and the activity was subsequently torn down and the app fell back to
-   `MainActivity` (no Java stack trace this time -- looked like a timeout/ANR
-   rather than a crash). `RemoteComposeView.java` compares
-   `document.bitmapMemory()` (accumulated per-bitmap `height * width * 4`)
-   against `Limits.MAX_BITMAP_MEMORY`, which defaults to a conservative `20 *
-   1024 * 1024` (20MB) -- and up to 10 real article photos, even at modest
-   sizes, plausibly exceed that budget in one document. This wasn't fully
-   root-caused or fixed in this session. Likely next step: call
-   `player.setMaxBitmapMemory(...)` (or reduce the number of images loaded at
-   once) and re-verify with a real `NEWSAPI_API_KEY` end to end.
+   "memory"-related warning overlay (partial text: "...map memory 1152M...").
+   `RemoteComposeView.java` compares `document.bitmapMemory()` against
+   `Limits.MAX_BITMAP_MEMORY` (default `20 * 1024 * 1024`, 20MB) -- and
+   critically, `CoreDocument`'s accumulation is computed from the *declared*
+   width/height (fix 3's bound), not the real decoded image size. Confirmed
+   empirically: raising the client budget to 150MB *without* changing the
+   declared bound reproduced the exact same "1152M" figure, proving the total
+   was independent of the budget and driven by the declared size. Lowering
+   `MAX_DECLARED_IMAGE_DIMENSION` from `4096` to `2000` dropped the reported
+   total to "274M" (matching the (2000/4096)^2 scaling almost exactly),
+   and `RemoteComposeDocumentView` now also calls `player.setMaxBitmapMemory(400
+   * 1024 * 1024)` for comfortable headroom above that measured figure.
 
-**Net result:** the Hello screen (verified unaffected -- text, Click me
-Toast, and the new View News button all still work after the
-`RemoteDocumentScreen` extraction) and app navigation (View News ->
-`NewsActivity`) both work. The news screen itself does not yet reliably
-render real article images end-to-end; fixes 1-3 were necessary and are
-committed, but fix 4 is required before this is fully working.
+**Net result: fully working.** Verified end to end on the `Medium_Phone_API_36.1`
+emulator against a live backend with a real `NEWSAPI_API_KEY`: the Hello
+screen is unaffected by the `RemoteDocumentScreen` extraction (text, Click me
+Toast, buttons all still work), "View News" navigates to `NewsActivity`, and
+real article cards render there with real images, titles, and descriptions,
+no crash. (Not separately verified in this session: horizontal scrolling
+past the first two cards -- a swipe gesture didn't visibly move the row in
+one attempt, not investigated further since it's unrelated to the
+memory/crash issues this session was focused on.)

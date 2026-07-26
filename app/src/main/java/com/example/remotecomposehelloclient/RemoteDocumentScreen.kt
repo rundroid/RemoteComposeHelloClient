@@ -98,6 +98,11 @@ fun RemoteDocumentScreen(
  * [Dispatchers.IO] and only [RemoteComposePlayer.setPreparedDocument] (cheap,
  * no I/O) runs on the main thread. Keyed on [documentBytes] so this only
  * re-runs when the document actually changes, not on every recomposition.
+ * Shows a loading spinner while preparing -- this is a second, separate wait
+ * after [RemoteDocumentScreen]'s own fetch-from-server spinner: bytes have
+ * already arrived, but the images they reference by URL still need to be
+ * downloaded and decoded on-device, which can take a few seconds for a
+ * document with several images.
  *
  * `androidx.compose.remote:*` is alpha and marked `@RestrictTo(LIBRARY_GROUP)`
  * upstream in its entirety -- every call into it here (`RemoteComposePlayer`,
@@ -124,8 +129,10 @@ private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, 
                 setMaxBitmapMemory(80 * 1024 * 1024)
             }
         }
+    var isPreparing by remember(documentBytes) { mutableStateOf(true) }
 
     LaunchedEffect(documentBytes) {
+        isPreparing = true
         // Documents referencing images by URL (ENCODING_URL bitmaps) are rejected during
         // parsing unless this is explicitly enabled -- it's a deliberate safety gate against
         // a document making the app fetch arbitrary attacker-supplied URLs. Accepted here
@@ -143,7 +150,12 @@ private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, 
             player.document.document.clearActionCallbacks()
             player.document.document.addIdActionListener { id, metadata -> onAction(id, metadata) }
         }
+        isPreparing = false
     }
 
-    AndroidView(modifier = Modifier.fillMaxWidth(), factory = { player })
+    if (isPreparing) {
+        CircularProgressIndicator()
+    } else {
+        AndroidView(modifier = Modifier.fillMaxWidth(), factory = { player })
+    }
 }

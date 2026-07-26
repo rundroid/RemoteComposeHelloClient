@@ -377,7 +377,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -471,6 +470,8 @@ private fun openUrlInBrowser(context: Context, url: String) {
     }
 }
 ```
+
+Note (found during implementation): `Modifier.weight(1f)` above needs **no import at all** — `weight` is a member function of the `ColumnScope` interface (`fun Modifier.weight(weight: Float, fill: Boolean = true): Modifier`, declared directly on the interface in `androidx.compose.foundation.layout.Column.kt`), not a top-level extension, so it resolves automatically inside `Column { ... }`'s content lambda. There is a same-named but unrelated `internal val RowColumnParentData?.weight: Float` top-level property elsewhere in the same package; explicitly writing `import androidx.compose.foundation.layout.weight` binds to *that* internal property instead and fails to compile ("it is internal in file"). Leave `weight` out of the import list entirely.
 
 - [ ] **Step 5: Compile to verify**
 

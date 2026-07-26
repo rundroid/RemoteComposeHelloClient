@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.remote.core.Limits
 import androidx.compose.remote.player.core.RemoteDocument
 import androidx.compose.remote.player.view.RemoteComposePlayer
 import androidx.compose.runtime.Composable
@@ -103,6 +104,12 @@ private fun RemoteComposeDocumentView(documentBytes: ByteArray, onAction: (Int, 
     val player = remember { RemoteComposePlayer(context) }
 
     LaunchedEffect(documentBytes) {
+        // Documents referencing images by URL (ENCODING_URL bitmaps) are rejected during
+        // parsing unless this is explicitly enabled -- it's a deliberate safety gate against
+        // a document making the app fetch arbitrary attacker-supplied URLs. Accepted here
+        // because this app only ever loads documents from remote-compose-hello, a server we
+        // control.
+        Limits.ENABLE_IMAGE_URLS = true
         val prepared =
             withContext(Dispatchers.IO) {
                 player.prepareDocument(RemoteDocument(documentBytes))

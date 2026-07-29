@@ -79,3 +79,110 @@ live `remote-compose-hello` instance:
 - No URL validation beyond scheme-normalization (`https://` is prepended
   when missing) — a malformed or unexpected metadata string would be passed
   to Custom Tabs as-is.
+
+## News screen
+
+A second screen, `NewsActivity`, fetches `remote-compose-hello`'s
+`GET /api/news` document (a horizontally scrollable carousel of news Cards,
+each with an image, title, and description) and renders it. `MainActivity`
+gained a "View News" button that launches it via an explicit `Intent`.
+
+`HelloDocumentScreen` and the new news screen now share
+`RemoteDocumentScreen.kt` (`RemoteDocumentScreen` composable + `DocumentState`),
+extracted from what used to be `MainActivity`-only code. `NewsDocumentClient.kt`
+mirrors `HelloDocumentClient.kt`'s OkHttp-on-`Dispatchers.IO` pattern exactly,
+against `http://10.0.2.2:8080/api/news`.
+
+### Cards are tappable: open the article in a Custom Tab
+
+The backend attaches each article's own URL (distinct from `urlToImage`) to
+its card via `OPEN_ARTICLE_ACTION_ID` -- see `remote-compose-hello`'s
+`docs/design.md` "Cards are tappable" section. `NewsActivity` mirrors this id
+(same convention as `MainActivity`'s `CLICK_ME_ACTION_ID`/`OPEN_LINK_ACTION_ID`)
+and, on that action, calls `openUrlInBrowser` (extracted from `MainActivity.kt`
+into `BrowserUtils.kt` so both screens share one implementation) to open the
+article in a Chrome Custom Tab. Verified on the emulator: tapping a card opens
+the real article (e.g. a BBC News page) in a Custom Tab; the Hello screen's
+existing "Open Link" button still works unchanged after the extraction.
+
+### Article images: what it actually took to make URL-backed bitmaps work
+
+The backend embeds each article's image as a URL (`writer.addBitmapUrl`), not
+raw bytes — the player is expected to fetch and decode it itself. Getting
+this to actually work end-to-end (built, installed, and driven on the
+`Medium_Phone_API_36.1` emulator against a live backend with a real
+`NEWSAPI_API_KEY`) took three fixes, two of which are done and one of which
+is an open follow-up:
+
+1. **Main-thread network fix (done).** `AndroidBitmapLoader.loadBitmap` is a
+   blocking, un-threaded `URL.openStream()` call, invoked synchronously
+   wherever `BitmapData.apply()` runs. `RemoteComposeDocumentView` calls
+   `player.prepareDocument(RemoteDocument(bytes))` on `Dispatchers.IO` (which
+   is where the network fetches happen) and only
+   `player.setPreparedDocument(prepared)` on the main thread.
+
+2. **`Limits.ENABLE_IMAGE_URLS` gate (done).** Even with the threading fixed,
+   the very first attempt crashed with `RuntimeException: URL image not
+   supported [45]`, thrown from `BitmapData.read()` during document parsing
+   -- before any network I/O happens at all. `androidx.compose.remote.core.Limits.ENABLE_IMAGE_URLS`
+   defaults to `false`; it's a deliberate safety gate against a document
+   making the app fetch arbitrary attacker-supplied URLs. `RemoteComposeDocumentView`
+   now sets `Limits.ENABLE_IMAGE_URLS = true` before constructing
+   `RemoteDocument` (accepted here since this app only ever loads documents
+   from a server we control).
+
+3. **Backend: declared bitmap dimensions (done).** With the gate open, the
+   next attempt crashed with `RuntimeException: dimensions don't match
+   980x653 vs 1x1` from `RemoteBitmapDecoder.checkBounds`. The backend's
+   `NewsCarouselDocument.kt` called the 1-argument `writer.addBitmapUrl(url)`
+   overload, which defaults the declared width/height to `1x1`; the client
+   enforces that a decoded image's actual pixel dimensions never exceed the
+   *declared* ones (a guard against a document under-declaring size to
+   smuggle an oversized bitmap). Initially fixed by declaring a generous
+   padded bound instead (`4096`, later `2000`) -- since superseded by fix 5
+   below, which declares the real size instead of a guess.
+
+4. **Total bitmap memory budget (initially patched, then properly fixed by
+   fix 5).** With fix 3 at a padded `4096` declared bound, the news screen
+   still didn't reliably render real cards: a real run showed one card's
+   image slot replaced with the player's own "memory"-related warning
+   overlay (partial text: "...map memory 1152M..."). `RemoteComposeView.java`
+   compares `document.bitmapMemory()` against `Limits.MAX_BITMAP_MEMORY`
+   (default `20 * 1024 * 1024`, 20MB) -- and critically, `CoreDocument`'s
+   accumulation is computed from the *declared* width/height, not the real
+   decoded image size. Confirmed empirically: raising the client budget to
+   150MB *without* changing the declared bound reproduced the exact same
+   "1152M" figure, proving the total was independent of the budget and
+   driven by the declared size. Lowering the declared bound to `2000` first
+   (a still-padded guess) dropped the reported total to "274M" (matching the
+   scaling with declared-dimension squared almost exactly) -- a workaround,
+   not the real fix, superseded by fix 5.
+
+5. **Real per-image dimensions instead of a padded guess (done, on the
+   backend).** A padded declared bound is a guessing game: too small risks
+   `checkBounds` rejecting a genuinely large real photo; too large wastes
+   memory (and, it turned out, feeds wrong dimensions into the image's
+   scale/crop math -- images only filled a thin strip of their card slot at
+   `2000`/`4096`, not the full area). The backend now probes each image's
+   *real* width/height from just its file header (`ImageDimensionProbe.kt`,
+   fetching 128KB, not the whole image) and declares that exact size to
+   `addBitmapUrl`. `RemoteComposeDocumentView`'s `setMaxBitmapMemory` dropped
+   to `80 * 1024 * 1024` (80MB) accordingly -- real article photos only need
+   a few MB each, not a padded worst case. If a probe fails, that article's
+   image is skipped entirely (same as no `urlToImage`) rather than guessing.
+
+**Net result: fully working, images correctly filling their card slot.**
+Verified end to end on the `Medium_Phone_API_36.1` emulator against a live
+backend with a real `NEWSAPI_API_KEY`: the Hello screen is unaffected by the
+`RemoteDocumentScreen` extraction (text, Click me Toast, buttons all still
+work), "View News" navigates to `NewsActivity`, and real article cards
+render there with real images (now correctly cropped to fill their slot,
+which the earlier padded-dimension fixes didn't achieve), titles, and
+descriptions, no crash, no memory warning. Trade-off from fix 5: `/api/news`
+now takes ~4s (sequential per-image header probes on the backend) instead of
+being near-instant -- documented on the backend as a follow-up
+(parallelize/cache the probes). (Not separately verified in this session:
+horizontal scrolling past the first two cards -- a swipe gesture didn't
+visibly move the row in one attempt, not investigated further since it's
+unrelated to the
+memory/crash issues this session was focused on.)
